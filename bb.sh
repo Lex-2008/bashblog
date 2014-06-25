@@ -161,6 +161,19 @@ global_variables() {
     # feed file (rss in this case)
     blog_feed="feed.rss"
     number_of_feed_articles="10"
+    # sitemap (a file to help search robots to find all pages of your blog)
+    sitemap_file="sitemap.xml"
+    # how often individual posts are expected to change (hint to search engines)
+    # possible values: always hourly daily weekly monthly yearly never
+    sitemap_changefreq_post="never"
+    # how often all other pages are expected to change (due to new posts being created)
+    sitemap_changefreq_index="weekly"
+    # how important are post pages relative to other ones.
+    # Valid values are from 0.0 to 1.0.
+    sitemap_priority_post="0.7"
+    # how important is the index page relative to other ones.
+    sitemap_priority_index="1.0"
+    # All other pages (all_posts, tags, etc) have default priority of 0.5
     # "cut" blog entry when putting it to index page
     # i.e. include only up to first <hr> (---- in markdown)
     # possible values: "cut", ""
@@ -915,6 +928,67 @@ make_rss() {
     chmod 644 "$blog_feed"
 }
 
+# Generate the sitemap.xml file
+make_sitemap() {
+    echo -n "Making Sitemap "
+
+    sitemapfile="$sitemap_file.$RANDOM"
+    while [ -f "$sitemapfile" ]; do sitemapfile="$sitemap_file.$RANDOM"; done
+
+    cat << EOF > $sitemapfile
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+    <url>
+        <loc>$global_url/</loc>
+        <lastmod>$(LC_ALL=C date -r "$index_file" +"%Y-%m-%d")</lastmod>
+        <changefreq>$sitemap_changefreq_index</changefreq>
+        <priority>$sitemap_priority_index</priority>
+    </url>
+    <url>
+        <loc>$global_url/$archive_index</loc>
+        <lastmod>$(LC_ALL=C date -r "$archive_index" +"%Y-%m-%d")</lastmod>
+        <changefreq>$sitemap_changefreq_index</changefreq>
+    </url>
+    <url>
+        <loc>$global_url/$tags_index</loc>
+        <lastmod>$(LC_ALL=C date -r "$tags_index" +"%Y-%m-%d")</lastmod>
+        <changefreq>$sitemap_changefreq_index</changefreq>
+    </url>
+EOF
+
+    for i in $(ls -t ./*.html); do
+        is_boilerplate_file "$i" && continue
+        echo -n "."
+        cat << EOF >> $sitemapfile
+    <url>
+        <loc>$global_url/$(clean_filename $i)</loc>
+        <lastmod>$(LC_ALL=C date -r "$i" +"%Y-%m-%d")</lastmod>
+        <changefreq>$sitemap_changefreq_post</changefreq>
+        <priority>$sitemap_priority_post</priority>
+    </url>
+EOF
+    done
+
+    echo -n " "
+
+    for i in $(ls -t ./$prefix_tags*.html); do
+        echo -n "."
+        cat << EOF >> $sitemapfile
+    <url>
+        <loc>$global_url/$(clean_filename $i)</loc>
+        <lastmod>$(LC_ALL=C date -r "$i" +"%Y-%m-%d")</lastmod>
+        <changefreq>$sitemap_changefreq_index</changefreq>
+    </url>
+EOF
+    done
+
+    echo '</urlset>' >> "$sitemapfile"
+    echo ""
+
+    mv "$sitemapfile" "$sitemap_file"
+    chmod 644 "$sitemap_file"
+}
+
 # generate headers, footers, etc
 create_includes() {
     echo '<h1 class="nomargin"><a class="ablack" href="'$global_url'">'$global_title'</a></h1>' > ".title.html"
@@ -1152,6 +1226,7 @@ do_main() {
     all_posts
     all_tags
     make_rss
+    make_sitemap
     delete_includes
 }
 
